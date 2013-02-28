@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"io/ioutil"
+	"net"
 	"net/http"
 	"regexp"
 )
@@ -13,13 +14,6 @@ import (
 var user string
 var password string
 var hostname string
-
-func initFlags() {
-	flag.StringVar(&user, "u", "", "the router's admin user")
-	flag.StringVar(&password, "p", "admin", "the router's admin password")
-	flag.StringVar(&hostname, "h", "192.168.0.1", "the router's IP address")
-	flag.StringVar(&hostname, "ip", "192.168.0.1", "the router's IP address")
-}
 
 func main() {
 	initFlags()
@@ -39,14 +33,50 @@ func main() {
 	clients.PrintColored()
 }
 
-type Client struct {
-	Name     string
-	Ip       string
-	Mac      string
-	Lease    string
-	ClientId string
+func initFlags() {
+	flag.StringVar(&user, "u", "", "the router's admin user")
+	flag.StringVar(&password, "p", "admin", "the router's admin password")
+	var default_hostname = defaultHostname()
+	flag.StringVar(&hostname, "h", default_hostname, "the router's IP address")
+	flag.StringVar(&hostname, "ip", default_hostname, "the router's IP address")
 }
-type Clients []Client
+
+// find the router ip based on the computer's ip
+func defaultHostname() string {
+	var interfaces, err = net.Interfaces()
+	if err != nil {
+		fmt.Println(err)
+		return "192.168.1.1"
+	}
+	// choose ipv4 addresses, because my wrt admin isn't accessable in ipv6
+	// the second grouping gets the first three octets
+	var router_rex = regexp.MustCompile(`^(((192|10)\.\d+\.\d+\.)\d+)[^\d\.]?`)
+	for _, inter := range interfaces {
+		// make sure the interface is live (up) and not a 'fake' loopback address
+		// brain broken, couldn't figure out a single bitwise statement
+		if 0 == inter.Flags&net.FlagLoopback && 0 != inter.Flags&net.FlagUp {
+			var addrs, err = inter.Addrs()
+			if err != nil {
+				fmt.Println(err)
+				continue
+			}
+			// any interface could have multiple ip's assigned
+			// usually ipv4 and ipv6
+			for _, addr := range addrs {
+				var ip = addr.String()
+				ipmatch := router_rex.FindStringSubmatch(ip)
+				if len(ipmatch) > 0 {
+					// looks like an ipv4, take the first 3 octets
+					// rex match 0 is full string so second grouping is 2
+					return ipmatch[2] + "1"
+				}
+			}
+		}
+	}
+	// default the router's default ip
+	// although it should probably error that your're not connected via NAT
+	return "192.168.1.1"
+}
 
 // get the html from the router's DHCP client list
 func requestHtml(url string, user string, password string) (html []byte, err error) {
@@ -107,6 +137,15 @@ func FromWRTHtml(html string) (Clients, error) {
 	}
 	return clients, nil
 }
+
+type Client struct {
+	Name     string
+	Ip       string
+	Mac      string
+	Lease    string
+	ClientId string
+}
+type Clients []Client
 
 // display the clients on a standard CLI
 func (c *Clients) PrintPlain() {
