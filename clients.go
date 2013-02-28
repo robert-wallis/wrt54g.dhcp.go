@@ -3,22 +3,30 @@ package main
 
 import (
 	"crypto/tls"
-	"fmt"
 	"flag"
+	"fmt"
 	"io/ioutil"
 	"net/http"
 	"regexp"
 )
 
-var user = flag.String("u", "", "the router's admin user")
-var password = flag.String("p", "admin", "the router's admin password")
-var hostname = flag.String("ip", "192.168.0.1", "the router's IP address")
+var user string
+var password string
+var hostname string
+
+func initFlags() {
+	flag.StringVar(&user, "u", "", "the router's admin user")
+	flag.StringVar(&password, "p", "admin", "the router's admin password")
+	flag.StringVar(&hostname, "h", "192.168.0.1", "the router's IP address")
+	flag.StringVar(&hostname, "ip", "192.168.0.1", "the router's IP address")
+}
 
 func main() {
-	flag.Parse();
-	url := fmt.Sprint("https://", *hostname, "/DHCPTable.asp")
-	fmt.Println("Querying", *hostname, "for the DHCP client list.")
-	html, err := requestHtml(url, *user, *password)
+	initFlags()
+	flag.Parse()
+	url := fmt.Sprint("https://", hostname, "/DHCPTable.asp")
+	fmt.Println("Querying", hostname, "for the DHCP client list.")
+	html, err := requestHtml(url, user, password)
 	if err != nil {
 		fmt.Println(err)
 		return
